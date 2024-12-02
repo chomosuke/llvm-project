@@ -14,6 +14,7 @@
 #include "ConfigProvider.h"
 #include "Feature.h"
 #include "IncludeCleaner.h"
+#include "NoLintFixer.h"
 #include "PathMapping.h"
 #include "Protocol.h"
 #include "TidyProvider.h"
@@ -191,6 +192,14 @@ opt<bool> EnableClangTidy{
     cat(Features),
     desc("Enable clang-tidy diagnostics"),
     init(true),
+};
+
+opt<bool> EnableClangTidyNoLintFix{
+    "clang-tidy-nolint-fixes",
+    cat(Features),
+    desc("Enable inserting code actions which add NOLINTNEXTLINE to suppress "
+         "clangd warnings."),
+    init(false),
 };
 
 opt<CodeCompleteOptions::CodeCompletionParse> CodeCompletionParse{
@@ -954,6 +963,9 @@ clangd accepts flags on the commandline, and in the CLANGD_FLAGS environment var
   Config = config::Provider::combine(std::move(ProviderPointers));
   Opts.ConfigProvider = Config.get();
 
+  FeatureModuleSet FeatureModules;
+  Opts.FeatureModules = &FeatureModules;
+
   // Create an empty clang-tidy option.
   TidyProvider ClangTidyOptProvider;
   if (EnableClangTidy) {
@@ -967,6 +979,9 @@ clangd accepts flags on the commandline, and in the CLANGD_FLAGS environment var
     Providers.push_back(disableUnusableChecks());
     ClangTidyOptProvider = combine(std::move(Providers));
     Opts.ClangTidyProvider = ClangTidyOptProvider;
+    if (EnableClangTidyNoLintFix) {
+      Opts.FeatureModules->add(std::make_unique<NoLintFixerModule>());
+    }
   }
   Opts.UseDirtyHeaders = UseDirtyHeaders;
   Opts.PreambleParseForwardingFunctions = PreambleParseForwardingFunctions;
