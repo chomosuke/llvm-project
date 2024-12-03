@@ -521,9 +521,7 @@ std::optional<std::string> getCanonicalPath(const FileEntryRef F,
                                             FileManager &FileMgr) {
   llvm::SmallString<128> FilePath = F.getName();
   if (!llvm::sys::path::is_absolute(FilePath)) {
-    if (auto EC =
-            FileMgr.getVirtualFileSystem().makeAbsolute(
-                FilePath)) {
+    if (auto EC = FileMgr.getVirtualFileSystem().makeAbsolute(FilePath)) {
       elog("Could not turn relative path '{0}' to absolute: {1}", FilePath,
            EC.message());
       return std::nullopt;

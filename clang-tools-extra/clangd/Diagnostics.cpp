@@ -19,6 +19,7 @@
 #include "clang/Basic/SourceLocation.h"
 #include "clang/Basic/SourceManager.h"
 #include "clang/Basic/TokenKinds.h"
+#include "clang/Format/Format.h"
 #include "clang/Lex/Lexer.h"
 #include "clang/Lex/Token.h"
 #include "llvm/ADT/ArrayRef.h"
@@ -593,6 +594,11 @@ std::vector<Diag> StoreDiags::take(const clang::tidy::ClangTidyContext *Tidy) {
       if (!TidyDiag.empty()) {
         Diag.Name = std::move(TidyDiag);
         Diag.Source = Diag::ClangTidy;
+        // clang-tidy fixes rely on cleanupAroundReplacements being called, call
+        // it here also
+        for (auto &Fix : Diag.Fixes) {
+        }
+
         // clang-tidy bakes the name into diagnostic messages. Strip it out.
         // It would be much nicer to make clang-tidy not do this.
         auto CleanMessage = [&](std::string &Msg) {
@@ -741,8 +747,10 @@ void StoreDiags::HandleDiagnostic(DiagnosticsEngine::Level DiagLevel,
       return false;
     // Copy as we may modify the ranges.
     auto FixIts = Info.getFixItHints().vec();
-    llvm::SmallVector<TextEdit, 1> Edits;
+
+    std::optional<tooling::Replacements> Replacements;
     for (auto &FixIt : FixIts) {
+
       // Allow fixits within a single macro-arg expansion to be applied.
       // This can be incorrect if the argument is expanded multiple times in
       // different contexts. Hopefully this is rare!
@@ -761,7 +769,26 @@ void StoreDiags::HandleDiagnostic(DiagnosticsEngine::Level DiagLevel,
         return false;
       if (!isInsideMainFile(FixIt.RemoveRange.getBegin(), SM))
         return false;
-      Edits.push_back(toTextEdit(FixIt, SM, *LangOpts));
+
+      auto Err = Replacements->add(tooling::Replacement(
+          SM, FixIt.RemoveRange, FixIt.CodeToInsert, *LangOpts));
+      if (Err) {
+        Replacements = std::nullopt;
+        break;
+      }
+    }
+
+    llvm::SmallVector<TextEdit, 1> Edits;
+    if (Replacements) {
+      StringRef Code = SM.getBufferData(SM.getMainFileID());
+      auto Repl = format::cleanupAroundReplacements(Code, *Replacements,
+                                                    format::getNoStyle());
+      auto Es = replacementsToEdits(Code, *Repl);
+      Edits.append(Es.begin(), Es.end());
+    } else {
+      for (auto &FixIt : FixIts) {
+        Edits.push_back(toTextEdit(FixIt, SM, *LangOpts));
+      }
     }
 
     llvm::SmallString<64> Message;
@@ -795,8 +822,7 @@ void StoreDiags::HandleDiagnostic(DiagnosticsEngine::Level DiagLevel,
     }
     if (Message.empty()) // either !SyntheticMessage, or we failed to make one.
       Info.FormatDiagnostic(Message);
-    LastDiag->Fixes.push_back(
-        Fix{std::string(Message), std::move(Edits), {}});
+    LastDiag->Fixes.push_back(Fix{std::string(Message), std::move(Edits), {}});
     return true;
   };
 
