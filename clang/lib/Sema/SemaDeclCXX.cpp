@@ -52,6 +52,7 @@
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Support/ConvertUTF.h"
 #include "llvm/Support/SaveAndRestore.h"
+#include <iostream>
 #include <map>
 #include <optional>
 #include <set>
@@ -9374,6 +9375,7 @@ bool SpecialMemberDeletionInfo::shouldDeleteForSubobjectCall(
 
   if (Diagnose) {
     if (Field) {
+      std::cout << "Field\n";
       S.Diag(Field->getLocation(),
              diag::note_deleted_special_member_class_subobject)
           << llvm::to_underlying(getEffectiveCSM()) << MD->getParent()
@@ -9381,6 +9383,7 @@ bool SpecialMemberDeletionInfo::shouldDeleteForSubobjectCall(
           << /*IsObjCPtr*/ false;
     } else {
       CXXBaseSpecifier *Base = cast<CXXBaseSpecifier *>(Subobj);
+      std::cout << "Base: " << llvm::to_underlying(getEffectiveCSM()) << '\n';
       S.Diag(Base->getBeginLoc(),
              diag::note_deleted_special_member_class_subobject)
           << llvm::to_underlying(getEffectiveCSM()) << MD->getParent()
@@ -9417,6 +9420,7 @@ bool SpecialMemberDeletionInfo::shouldDeleteForClassSubobject(
   // C++11 [class.dtor]p5:
   // -- any direct or virtual base class [...] has a type with a destructor
   //    that is deleted or inaccessible
+  std::cout << "Isn'tConstructor" << '\n';
   if (!(CSM == CXXSpecialMemberKind::DefaultConstructor && Field &&
         Field->hasInClassInitializer()) &&
       shouldDeleteForSubobjectCall(Subobj, lookupIn(Class, Quals, IsMutable),
@@ -9430,6 +9434,7 @@ bool SpecialMemberDeletionInfo::shouldDeleteForClassSubobject(
     Sema::SpecialMemberOverloadResult SMOR =
         S.LookupSpecialMember(Class, CXXSpecialMemberKind::Destructor, false,
                               false, false, false, false);
+    std::cout << "IsConstructor" << '\n';
     if (shouldDeleteForSubobjectCall(Subobj, SMOR, true))
       return true;
   }
@@ -9453,6 +9458,7 @@ bool SpecialMemberDeletionInfo::shouldDeleteForVariantObjCPtrMember(
 
   if (Diagnose) {
     auto *ParentClass = cast<CXXRecordDecl>(FD->getParent());
+    std::cout << "ParentClass\n";
     S.Diag(FD->getLocation(), diag::note_deleted_special_member_class_subobject)
         << llvm::to_underlying(getEffectiveCSM()) << ParentClass
         << /*IsField*/ true << FD << 4 << /*IsDtorCallInCtor*/ false
@@ -9479,6 +9485,7 @@ bool SpecialMemberDeletionInfo::shouldDeleteForBase(CXXBaseSpecifier *Base) {
     // FIXME: Check that the base has a usable destructor! Sink this into
     // shouldDeleteForClassSubobject.
     if (BaseCtor->isDeleted() && Diagnose) {
+      std::cout << "BaseCtor\n";
       S.Diag(Base->getBeginLoc(),
              diag::note_deleted_special_member_class_subobject)
           << llvm::to_underlying(getEffectiveCSM()) << MD->getParent()

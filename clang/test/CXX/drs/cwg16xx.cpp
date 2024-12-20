@@ -323,6 +323,22 @@ namespace cwg1658 { // cwg1658: 5
     //   since-cxx11-note@#cwg1658-F5 {{move constructor of 'F' is implicitly deleted because base class 'A' has an inaccessible move constructor}}
   }
 
+  namespace InvokeCtorDeletedViaSuper {
+    struct A {
+      A() = default;
+      A(const A&) = delete;
+      A &operator=(const A&) = delete;
+      A(A&&) = delete;
+      A &operator=(A&&) = delete;
+    };
+
+    struct B : public A {};
+
+    void f() {
+      B b;
+    }
+  }
+
   // assignment case is superseded by cwg2180
 }
 
